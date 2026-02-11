@@ -444,38 +444,6 @@ async fn perform_login(email: &str, password: &str, state: &AppState) -> Result<
     }
 }
 
-/// Save registry with a stable password-derived key (salt stored on disk)
-fn save_registry_with_password(
-    user_dir: &PathBuf,
-    password: &str,
-    registry: &VaultRegistry,
-) -> Result<(), String> {
-    let salt_path = user_dir.join("master.salt");
-
-    // Create or load stable salt
-    let salt = if salt_path.exists() {
-        std::fs::read(&salt_path).map_err(|e| format!("Read salt error: {}", e))?
-    } else {
-        let s = crypto::generate_salt();
-        std::fs::write(&salt_path, &s).map_err(|e| format!("Write salt error: {}", e))?;
-        s
-    };
-
-    let key = crypto::derive_key(password, &salt)?;
-    vault_meta::save_registry(registry, &key, &user_dir.join("registry.pass"))
-}
-
-/// Load registry using the stable password-derived key
-fn load_registry_with_password(
-    user_dir: &PathBuf,
-    password: &str,
-) -> Result<VaultRegistry, String> {
-    let salt_path = user_dir.join("master.salt");
-    let salt = std::fs::read(&salt_path).map_err(|e| format!("Read salt error: {}", e))?;
-    let key = crypto::derive_key(password, &salt)?;
-    vault_meta::load_registry(&user_dir.join("registry.pass"), &key)
-}
-
 /// Encrypt and save the RSA private key locally
 fn save_local_private_key(
     user_dir: &PathBuf,

@@ -57,10 +57,6 @@ pub fn generate_vault_key() -> [u8; 32] {
     key
 }
 
-pub fn vault_exists(path: &Path) -> bool {
-    path.exists()
-}
-
 pub fn save_vault(vault: &Vault, key: &[u8; 32], path: &Path) -> Result<(), String> {
     let json = serde_json::to_string(vault).map_err(|e| format!("Serialize error: {}", e))?;
     let (nonce, ciphertext) = crypto::encrypt(json.as_bytes(), key)?;
