@@ -24,7 +24,6 @@ base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 mongodb = "2"
-dotenvy = "0.15"
 rsa = { version = "0.9", features = ["pem"] }
 sha2 = "0.10"
 futures = "0.3"

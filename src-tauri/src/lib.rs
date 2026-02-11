@@ -11,16 +11,15 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    dotenvy::dotenv().ok();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
 
-            let mongo_uri = std::env::var("MONGODB_URI")
-                .unwrap_or_else(|_| "mongodb://localhost:27017".to_string());
+            let mongo_uri = option_env!("MONGODB_URI")
+                .unwrap_or("mongodb://localhost:27017")
+                .to_string();
 
             let client = tauri::async_runtime::block_on(async {
                 mongodb::Client::with_uri_str(&mongo_uri).await
