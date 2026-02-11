@@ -15,7 +15,6 @@ import { SecurityOverview } from "./security-overview";
 import { SecurityInsights } from "./security-insights";
 import { RecentEntries } from "./recent-entries";
 import { KeyRound, Lock, Shield, Star } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function DashboardPage() {
   const { entries } = useVault();
