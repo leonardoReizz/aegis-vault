@@ -5,8 +5,47 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aegis Vault</title>
+    <style>
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: oklch(0.18 0.02 271.27);
+        border-radius: 1.4rem;
+        transition: opacity 0.4s ease, visibility 0.4s ease;
+      }
+      #splash.fade-out {
+        opacity: 0;
+        visibility: hidden;
+      }
+      #splash img {
+        width: 64px;
+        height: 64px;
+        animation: splash-pulse 1.8s ease-in-out infinite;
+      }
+      #splash span {
+        margin-top: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        color: oklch(0.60 0.03 269.46);
+      }
+      @keyframes splash-pulse {
+        0%, 100% { opacity: 0.7; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.06); }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash">
+      <img src="/logo.png" alt="Aegis Vault" />
+      <span>Aegis Vault</span>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

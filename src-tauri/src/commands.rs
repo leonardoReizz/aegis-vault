@@ -668,13 +668,19 @@ pub async fn import_private_key(
         return Err("Recovery key does not match. Please check and try again.".to_string());
     }
 
-    // Save locally encrypted
-    let user_dir = {
+    // Save locally encrypted using the session password (the login password)
+    // so that try_restore_session can decrypt it later.
+    // Fall back to the password from the form if no session exists.
+    let (user_dir, save_password) = {
         let inner = state.inner.lock().map_err(|e| e.to_string())?;
-        inner.user_dir.clone().ok_or("No user directory")?
+        let ud = inner.user_dir.clone().ok_or("No user directory")?;
+        let sp = load_session(&state.app_data_dir)
+            .map(|(_, p)| p)
+            .unwrap_or_else(|_| password.clone());
+        (ud, sp)
     };
 
-    save_local_private_key(&user_dir, &password, &imported_private)?;
+    save_local_private_key(&user_dir, &save_password, &imported_private)?;
 
     // Store in app state
     {

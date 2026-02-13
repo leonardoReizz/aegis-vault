@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { I18nProvider } from "@/i18n";
@@ -11,10 +12,18 @@ import { AppLayout } from "@/components/app-layout";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
 import { VaultView } from "@/components/vault-view";
 
-function AppRouter() {
+function AppRouter({ onReady }: { onReady?: () => void }) {
   const { status: authStatus } = useAuth();
+  const dismissed = useRef(false);
 
-  if (authStatus === "loading") return <div className="min-h-screen bg-background" />;
+  useEffect(() => {
+    if (authStatus !== "loading" && !dismissed.current) {
+      dismissed.current = true;
+      onReady?.();
+    }
+  }, [authStatus, onReady]);
+
+  if (authStatus === "loading") return null;
   if (authStatus === "unauthenticated") return <AuthScreen />;
   if (authStatus === "pending_key_backup") return <KeyBackupScreen />;
   if (authStatus === "pending_key_import") return <KeyImportScreen />;
@@ -35,12 +44,12 @@ function AppRouter() {
   );
 }
 
-function App() {
+function App({ onReady }: { onReady?: () => void }) {
   return (
     <I18nProvider>
       <TooltipProvider delayDuration={300}>
         <AuthProvider>
-          <AppRouter />
+          <AppRouter onReady={onReady} />
         </AuthProvider>
       </TooltipProvider>
     </I18nProvider>
