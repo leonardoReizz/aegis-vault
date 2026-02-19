@@ -1,4 +1,6 @@
-# Pass
+# Aegis Vault
+
+> **[aegis-lp.cap.leonardo-reis.com](http://aegis-lp.cap.leonardo-reis.com/)**
 
 A cross-platform desktop password manager built with Tauri 2, React, and Rust. All sensitive data is encrypted locally using AES-256-GCM, with RSA-2048 key pairs enabling secure vault sharing between users.
 
