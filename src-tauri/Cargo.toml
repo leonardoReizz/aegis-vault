@@ -1,6 +1,6 @@
 [package]
 name = "pass"
-version = "0.1.3"
+version = "0.1.4"
 description = "Aegis Vault - A secure password manager"
 authors = ["leonardoReizz"]
 edition = "2021"
