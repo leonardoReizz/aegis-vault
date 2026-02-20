@@ -7,6 +7,9 @@ import {
   Settings2,
   Bell,
 } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -22,10 +25,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { useVaultList } from "@/contexts/vault-list-context";
 import { useI18n } from "@/i18n";
+
+const createVaultSchema = z.object({
+  name: z.string().min(1).max(50),
+});
+
+type CreateVaultValues = z.infer<typeof createVaultSchema>;
 
 interface VaultSelectorProps {
   onOpenSettings: () => void;
@@ -40,20 +56,28 @@ export function VaultSelector({
   const { vaults, activeVault, selectVault, createVault, pendingShares } =
     useVaultList();
   const [createOpen, setCreateOpen] = useState(false);
-  const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  async function handleCreate() {
-    if (!newName.trim()) return;
+  const form = useForm<CreateVaultValues>({
+    resolver: zodResolver(createVaultSchema),
+    defaultValues: { name: "" },
+  });
+
+  async function onSubmit(values: CreateVaultValues) {
     setCreating(true);
     try {
-      const created = await createVault(newName.trim());
+      const created = await createVault(values.name.trim());
       await selectVault(created.id);
       setCreateOpen(false);
-      setNewName("");
+      form.reset();
     } finally {
       setCreating(false);
     }
+  }
+
+  function handleOpenChange(open: boolean) {
+    setCreateOpen(open);
+    if (!open) form.reset();
   }
 
   return (
@@ -127,42 +151,52 @@ export function VaultSelector({
             </>
           )}
         </DropdownMenuContent>
-      </DropdownMenu> 
+      </DropdownMenu>
 
       {/* Create Vault Dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{t.vaults.createVault}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>{t.vaults.vaultName}</Label>
-              <Input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder={t.vaults.vaultNamePlaceholder}
-                autoFocus
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t.vaults.vaultName}</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={t.vaults.vaultNamePlaceholder}
+                        autoFocus
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setCreateOpen(false)}
-                className="flex-1"
-              >
-                {t.entry.cancel}
-              </Button>
-              <Button
-                onClick={handleCreate}
-                disabled={!newName.trim() || creating}
-                className="flex-1"
-              >
-                {t.vaults.createVault}
-              </Button>
-            </div>
-          </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleOpenChange(false)}
+                  className="flex-1"
+                >
+                  {t.entry.cancel}
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={creating}
+                  className="flex-1"
+                >
+                  {t.vaults.createVault}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </>

@@ -12,6 +12,9 @@ import {
   EyeOff,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Dialog,
   DialogContent,
@@ -21,9 +24,31 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
+
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8),
+    confirmNewPassword: z.string().min(8),
+  })
+  .refine((data) => data.newPassword === data.confirmNewPassword, {
+    path: ["confirmNewPassword"],
+    message: "passwords_mismatch",
+  });
+
+type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
 
 type SettingsSection = "general" | "account" | "terms" | "privacy";
 
@@ -204,32 +229,28 @@ function GeneralSection({ onClose }: { onClose: () => void }) {
 function AccountSection() {
   const { t } = useI18n();
   const { user, changePassword } = useAuth();
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const canSubmit =
-    currentPassword.length > 0 &&
-    newPassword.length >= 8 &&
-    newPassword === confirmPassword &&
-    !loading;
+  const form = useForm<ChangePasswordValues>({
+    resolver: zodResolver(changePasswordSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmNewPassword: "",
+    },
+  });
 
-  async function handleChangePassword(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canSubmit) return;
+  async function onSubmit(values: ChangePasswordValues) {
     setLoading(true);
     setError(null);
     setSuccess(false);
     try {
-      await changePassword(currentPassword, newPassword);
+      await changePassword(values.currentPassword, values.newPassword);
       setSuccess(true);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      form.reset();
     } catch (err) {
       setError(String(err));
     } finally {
@@ -255,86 +276,104 @@ function AccountSection() {
       <Separator />
 
       {/* Change Password */}
-      <form onSubmit={handleChangePassword} className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-medium">{t.settings.changePassword}</h4>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setShowPasswords(!showPasswords)}
-          >
-            {showPasswords ? (
-              <EyeOff className="h-4 w-4" />
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium">{t.settings.changePassword}</h4>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setShowPasswords(!showPasswords)}
+            >
+              {showPasswords ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            <FormField
+              control={form.control}
+              name="currentPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t.settings.currentPassword}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type={showPasswords ? "text" : "password"}
+                      placeholder="••••••••"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="newPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t.settings.newPassword}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type={showPasswords ? "text" : "password"}
+                      placeholder="••••••••"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t.auth.passwordRequirements}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="confirmNewPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t.settings.confirmNewPassword}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type={showPasswords ? "text" : "password"}
+                      placeholder="••••••••"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-500 bg-red-500/10 rounded-lg p-3">
+              {error}
+            </p>
+          )}
+          {success && (
+            <p className="text-sm text-green-600 bg-green-500/10 rounded-lg p-3">
+              {t.settings.passwordChanged}
+            </p>
+          )}
+
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : (
-              <Eye className="h-4 w-4" />
+              t.settings.changePassword
             )}
           </Button>
-        </div>
-
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="current-password">{t.settings.currentPassword}</Label>
-            <Input
-              id="current-password"
-              type={showPasswords ? "text" : "password"}
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="••••••••"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="new-password">{t.settings.newPassword}</Label>
-            <Input
-              id="new-password"
-              type={showPasswords ? "text" : "password"}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="••••••••"
-            />
-            <p className="text-xs text-muted-foreground">
-              {t.auth.passwordRequirements}
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirm-new-password">
-              {t.settings.confirmNewPassword}
-            </Label>
-            <Input
-              id="confirm-new-password"
-              type={showPasswords ? "text" : "password"}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="••••••••"
-            />
-            {confirmPassword && newPassword !== confirmPassword && (
-              <p className="text-xs text-red-500">{t.auth.passwordMismatch}</p>
-            )}
-          </div>
-        </div>
-
-        {error && (
-          <p className="text-sm text-red-500 bg-red-500/10 rounded-lg p-3">
-            {error}
-          </p>
-        )}
-        {success && (
-          <p className="text-sm text-green-600 bg-green-500/10 rounded-lg p-3">
-            {t.settings.passwordChanged}
-          </p>
-        )}
-
-        <Button type="submit" disabled={!canSubmit} className="w-full">
-          {loading ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          ) : (
-            t.settings.changePassword
-          )}
-        </Button>
-      </form>
+        </form>
+      </Form>
     </div>
   );
 }
