@@ -136,6 +136,14 @@ On **registration**, a RSA-2048 key pair is generated. The private key is saved 
 
 On **login from a new device** (where no local key file exists), the app prompts you to import your recovery key. Without it, shared vaults and previously encrypted data cannot be decrypted.
 
+## Roadmap
+
+- [ ] Google Authentication — Sign in with your Google account
+- [ ] Two-Factor Authentication (2FA) — Extra security layer for account access
+- [ ] Audit Log — Full change history tracking across vaults and entries
+- [ ] Standalone Password Generator — Use the password generator without creating an entry
+- [ ] Password History & Rollback — Version control for credentials with the ability to restore previous passwords
+
 ## License
 
 MIT
