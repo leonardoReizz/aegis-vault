@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutDashboard, KeyRound, Settings, Loader2 } from "lucide-react";
+import { LayoutDashboard, KeyRound, Wand2, Settings, Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { WindowTitleBar } from "@/components/window-title-bar";
 import { VaultSelector } from "@/components/vault-selector";
@@ -17,6 +17,7 @@ import {
 
 const NAV_ITEMS = [
   { path: "/", icon: LayoutDashboard, labelKey: "dashboard" as const },
+  { path: "/generator", icon: Wand2, labelKey: "generator" as const },
   { path: "/vault", icon: KeyRound, labelKey: "vault" as const },
 ];
 
@@ -72,22 +73,23 @@ export function AppLayout() {
         {/* Sidebar */}
         <nav className="w-14 shrink-0 border-r border-border/40 flex flex-col items-center py-3 gap-1">
           {/* Nav items with sliding indicator */}
-          <div className="relative flex flex-col items-center gap-1">
+          <div className="relative flex flex-col items-center">
             {/* Sliding active indicator */}
             <div
-              className="absolute w-10 h-10 rounded-xl bg-primary transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+              className="absolute left-1/2 -translate-x-1/2 w-10 h-10 rounded-[10px] bg-primary transition-[top] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
               style={{
-                transform: `translateY(${activeIndex * 44}px)`,
+                top: activeIndex * 45 + 1,
               }}
             />
 
             {NAV_ITEMS.map((item) => (
-              <SidebarLink
-                key={item.path}
-                to={item.path}
-                icon={item.icon}
-                label={t.nav[item.labelKey]}
-              />
+              <div key={item.path} className="h-[45px] flex items-center justify-center">
+                <SidebarLink
+                  to={item.path}
+                  icon={item.icon}
+                  label={t.nav[item.labelKey]}
+                />
+              </div>
             ))}
           </div>
 

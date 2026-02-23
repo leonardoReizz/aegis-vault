@@ -157,6 +157,19 @@ export const en = {
     generate: "Generate",
     usePassword: "Use Password",
   },
+  generatorPage: {
+    quickSave: "Quick Save to Vault",
+    entryName: "Entry Name",
+    entryNamePlaceholder: "e.g. My Generated Password",
+    username: "Username (optional)",
+    url: "Website (optional)",
+    save: "Save to Vault",
+    saved: "Saved!",
+    noPassword: "Click Generate to create a password",
+    strength: "Strength",
+    copyPassword: "Copy",
+    saveToVault: "Save to Vault",
+  },
   vaults: {
     title: "Vaults",
     myVault: "My Vault",
@@ -224,6 +237,7 @@ export const en = {
   },
   nav: {
     dashboard: "Dashboard",
+    generator: "Generator",
     vault: "Vault",
   },
   sync: {

@@ -23,6 +23,7 @@ interface EntryDialogProps {
   onOpenChange: (open: boolean) => void;
   entry?: VaultEntry | null;
   onSave: (data: EntryFormData) => Promise<void>;
+  defaultFields?: Record<string, string>;
 }
 
 const emptyForm: EntryFormData = {
@@ -33,7 +34,7 @@ const emptyForm: EntryFormData = {
   favorite: false,
 };
 
-export function EntryDialog({ open, onOpenChange, entry, onSave }: EntryDialogProps) {
+export function EntryDialog({ open, onOpenChange, entry, onSave, defaultFields }: EntryDialogProps) {
   const { t } = useI18n();
   const [form, setForm] = useState<EntryFormData>({ ...emptyForm });
   const [revealedFields, setRevealedFields] = useState<Set<string>>(new Set());
@@ -64,7 +65,14 @@ export function EntryDialog({ open, onOpenChange, entry, onSave }: EntryDialogPr
   }, [open, entry]);
 
   function selectType(type: EntryType) {
-    setForm((prev) => ({ ...prev, entry_type: type, fields: {} }));
+    const schema = getSchema(type);
+    const fields: Record<string, string> = {};
+    if (defaultFields) {
+      for (const f of schema.fields) {
+        if (defaultFields[f.key]) fields[f.key] = defaultFields[f.key];
+      }
+    }
+    setForm((prev) => ({ ...prev, entry_type: type, fields }));
     setStep("form");
   }
 

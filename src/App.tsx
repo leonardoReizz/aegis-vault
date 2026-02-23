@@ -13,6 +13,7 @@ import { GoogleVaultPasswordScreen } from "@/components/google-vault-password-sc
 import { AppLayout } from "@/components/app-layout";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
 import { VaultView } from "@/components/vault-view";
+import { GeneratorPage } from "@/components/generator-page";
 
 function AppRouter({ onReady }: { onReady?: () => void }) {
   const { status: authStatus } = useAuth();
@@ -42,6 +43,7 @@ function AppRouter({ onReady }: { onReady?: () => void }) {
           <Routes>
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
+              <Route path="/generator" element={<GeneratorPage />} />
               <Route path="/vault" element={<VaultView />} />
             </Route>
           </Routes>

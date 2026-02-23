@@ -160,6 +160,19 @@ export const ptBR: Translations = {
     generate: "Gerar",
     usePassword: "Usar Senha",
   },
+  generatorPage: {
+    quickSave: "Salvar Rápido no Cofre",
+    entryName: "Nome da Entrada",
+    entryNamePlaceholder: "ex: Minha Senha Gerada",
+    username: "Usuário (opcional)",
+    url: "Website (opcional)",
+    save: "Salvar no Cofre",
+    saved: "Salvo!",
+    noPassword: "Clique em Gerar para criar uma senha",
+    strength: "Força",
+    copyPassword: "Copiar",
+    saveToVault: "Salvar no Cofre",
+  },
   vaults: {
     title: "Cofres",
     myVault: "Meu Cofre",
@@ -227,6 +240,7 @@ export const ptBR: Translations = {
   },
   nav: {
     dashboard: "Dashboard",
+    generator: "Gerador",
     vault: "Cofre",
   },
   sync: {
