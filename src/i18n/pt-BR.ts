@@ -22,6 +22,8 @@ export const ptBR: Translations = {
     passwordMismatch: "As senhas não coincidem",
     rememberMe: "Lembrar de mim",
     logout: "Sair",
+    orContinueWith: "ou continue com",
+    continueWithGoogle: "Continuar com Google",
   },
   setup: {
     title: "Criar Senha Mestra",
@@ -276,5 +278,44 @@ export const ptBR: Translations = {
     passwordChanged: "Senha alterada com sucesso. Todas as chaves de criptografia foram atualizadas.",
     termsContent: "Termos de Uso\n\nÚltima atualização: Fevereiro de 2026\n\n1. Aceitação dos Termos\nAo usar o Aegis Vault, você concorda com estes termos de uso. Se você não concordar, por favor descontinue o uso do aplicativo.\n\n2. Descrição do Serviço\nO Aegis Vault é um gerenciador de senhas local que criptografa seus dados usando sua senha mestra. Suas senhas são armazenadas criptografadas em seu dispositivo.\n\n3. Responsabilidades do Usuário\nVocê é responsável por manter a segurança de sua senha mestra e chave de recuperação. Nós não podemos recuperar seus dados se você perder o acesso a ambos.\n\n4. Propriedade dos Dados\nTodos os dados armazenados no Aegis Vault pertencem a você. Nós não acessamos, lemos ou processamos seus dados criptografados.\n\n5. Limitação de Responsabilidade\nO Aegis Vault é fornecido \"como está\" sem garantias de qualquer tipo. Nós não somos responsáveis por qualquer perda de dados resultante de bugs, erro do usuário ou falha do dispositivo.\n\n6. Alterações nos Termos\nNós reservamos o direito de atualizar estes termos. O uso continuado do aplicativo constitui aceitação dos termos atualizados.",
     privacyContent: "Política de Privacidade\n\nÚltima atualização: Fevereiro de 2026\n\n1. Coleta de Dados\nO Aegis Vault coleta dados mínimos: seu endereço de email para identificação da conta e um hash de senha criptografado para autenticação. Os dados do seu cofre são criptografados localmente e nunca transmitidos em forma legível.\n\n2. Armazenamento Local\nSuas senhas e dados sensíveis são criptografados com AES-256-GCM usando chaves derivadas de sua senha mestra via Argon2. As chaves de criptografia nunca saem do seu dispositivo.\n\n3. Sincronização na Nuvem (Opcional)\nSe você ativar a sincronização na nuvem, os dados do seu cofre são transmitidos para nossos servidores em forma criptografada. Nós não podemos descriptografar seus dados. Somente você possui as chaves.\n\n4. Sem Rastreamento\nO Aegis Vault não usa analíticos, telemetria ou rastreamento de qualquer tipo. Nós não coletamos dados de uso.\n\n5. Serviços de Terceiros\nO Aegis Vault usa MongoDB para sincronização opcional na nuvem e gerenciamento de contas. Nenhum outro serviço de terceiros recebe seus dados.\n\n6. Exclusão de Dados\nVocê pode excluir sua conta e todos os dados associados a qualquer momento. Os dados locais são removidos ao desinstalar o aplicativo.\n\n7. Contato\nPara questões de privacidade, entre em contato em privacy@aegisvault.app.",
+  },
+  googleAuth: {
+    setupTitle: "Criar Senha do Cofre",
+    setupDescription:
+      "Esta senha criptografa os dados do seu cofre. O Google cuida do login, mas você precisa de uma senha separada para proteger suas senhas.",
+    loginTitle: "Desbloquear Cofre",
+    loginDescription: "Digite sua senha do cofre para descriptografar seus dados.",
+    backToLogin: "Voltar para login",
+    vaultPassword: "Senha do Cofre",
+    confirmVaultPassword: "Confirmar Senha do Cofre",
+  },
+  twoFactor: {
+    title: "Autenticação de Dois Fatores",
+    description:
+      "Adicione uma camada extra de segurança à sua conta usando um aplicativo autenticador.",
+    enable: "Ativar 2FA",
+    disable: "Desativar 2FA",
+    enabled: "Ativado",
+    disabled: "Desativado",
+    setupTitle: "Configurar Autenticação de Dois Fatores",
+    setupDescription:
+      "Escaneie este código QR com seu aplicativo autenticador (Google Authenticator, Authy, etc.)",
+    manualEntry: "Chave para entrada manual",
+    verifyCode: "Verificar Código",
+    codePlaceholder: "000000",
+    verify: "Verificar",
+    verifyTitle: "Autenticação de Dois Fatores",
+    verifyDescription:
+      "Digite o código de 6 dígitos do seu aplicativo autenticador.",
+    backupCodesTitle: "Salve Seus Códigos de Backup",
+    backupCodesDescription:
+      "Guarde estes códigos em um local seguro. Cada código só pode ser usado uma vez.",
+    backupCodeHint: "Você também pode usar um código de backup",
+    backToLogin: "Voltar para login",
+    disableConfirm:
+      "Digite um código do seu aplicativo autenticador para desativar o 2FA.",
+    disableWarning:
+      "Isso removerá a autenticação de dois fatores da sua conta.",
+    copied: "Copiado!",
   },
 };

@@ -7,13 +7,21 @@ import {
   type ReactNode,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { UserInfo, RegisterResult, LoginResult } from "@/types";
+import type {
+  UserInfo,
+  RegisterResult,
+  LoginResult,
+  GoogleOAuthResult,
+} from "@/types";
 
 type AuthStatus =
   | "loading"
   | "unauthenticated"
   | "pending_key_backup"
   | "pending_key_import"
+  | "pending_totp"
+  | "pending_google_vault_password_setup"
+  | "pending_google_vault_password"
   | "authenticated";
 
 interface AuthContextType {
@@ -28,6 +36,11 @@ interface AuthContextType {
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   error: string | null;
   clearError: () => void;
+  googleOAuthIdentify: () => Promise<void>;
+  registerWithGoogle: (password: string) => Promise<void>;
+  loginWithGoogleVaultPassword: (password: string) => Promise<void>;
+  verifyTotpLogin: (code: string) => Promise<void>;
+  googleOAuthData: { email: string; google_oauth_id: string } | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -37,12 +50,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [privateKeyPem, setPrivateKeyPem] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [googleOAuthData, setGoogleOAuthData] = useState<{
+    email: string;
+    google_oauth_id: string;
+  } | null>(null);
 
   useEffect(() => {
     invoke<LoginResult>("try_restore_session")
       .then((result) => {
         setUser(result.user);
-        if (result.needs_key_import) {
+        if (result.needs_totp) {
+          setStatus("pending_totp");
+        } else if (result.needs_key_import) {
           setStatus("pending_key_import");
         } else {
           setStatus("authenticated");
@@ -58,7 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       const result = await invoke<LoginResult>("login", { email, password, rememberMe });
       setUser(result.user);
-      if (result.needs_key_import) {
+      if (result.needs_totp) {
+        setStatus("pending_totp");
+      } else if (result.needs_key_import) {
         setStatus("pending_key_import");
       } else {
         setStatus("authenticated");
@@ -108,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await invoke("logout");
     setUser(null);
     setPrivateKeyPem(null);
+    setGoogleOAuthData(null);
     setError(null);
     setStatus("unauthenticated");
   }, []);
@@ -125,6 +147,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const googleOAuthIdentify = useCallback(async () => {
+    try {
+      setError(null);
+      const result = await invoke<GoogleOAuthResult>("google_oauth_identify");
+      setGoogleOAuthData({
+        email: result.email,
+        google_oauth_id: result.google_oauth_id,
+      });
+      if (result.is_new_user) {
+        setStatus("pending_google_vault_password_setup");
+      } else {
+        setStatus("pending_google_vault_password");
+      }
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  const registerWithGoogle = useCallback(
+    async (password: string) => {
+      if (!googleOAuthData) throw new Error("No Google OAuth data");
+      try {
+        setError(null);
+        const result = await invoke<RegisterResult>("register_with_google", {
+          email: googleOAuthData.email,
+          password,
+          googleOauthId: googleOAuthData.google_oauth_id,
+        });
+        setUser(result.user);
+        setPrivateKeyPem(result.private_key_pem);
+        setGoogleOAuthData(null);
+        setStatus("pending_key_backup");
+      } catch (e) {
+        setError(String(e));
+        throw e;
+      }
+    },
+    [googleOAuthData],
+  );
+
+  const loginWithGoogleVaultPassword = useCallback(
+    async (password: string) => {
+      if (!googleOAuthData) throw new Error("No Google OAuth data");
+      try {
+        setError(null);
+        const result = await invoke<LoginResult>("login", {
+          email: googleOAuthData.email,
+          password,
+          rememberMe: true,
+        });
+        setUser(result.user);
+        setGoogleOAuthData(null);
+        if (result.needs_totp) {
+          setStatus("pending_totp");
+        } else if (result.needs_key_import) {
+          setStatus("pending_key_import");
+        } else {
+          setStatus("authenticated");
+        }
+      } catch (e) {
+        setError(String(e));
+        throw e;
+      }
+    },
+    [googleOAuthData],
+  );
+
+  const verifyTotpLogin = useCallback(async (code: string) => {
+    try {
+      setError(null);
+      const result = await invoke<LoginResult>("verify_totp_login", { code });
+      setUser(result.user);
+      if (result.needs_key_import) {
+        setStatus("pending_key_import");
+      } else {
+        setStatus("authenticated");
+      }
+    } catch (e) {
+      setError(String(e));
+      throw e;
+    }
+  }, []);
+
   const clearError = useCallback(() => setError(null), []);
 
   return (
@@ -141,6 +246,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         changePassword,
         error,
         clearError,
+        googleOAuthIdentify,
+        registerWithGoogle,
+        loginWithGoogleVaultPassword,
+        verifyTotpLogin,
+        googleOAuthData,
       }}
     >
       {children}

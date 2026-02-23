@@ -47,6 +47,22 @@ export interface RegisterResult {
 export interface LoginResult {
   user: UserInfo;
   needs_key_import: boolean;
+  needs_totp: boolean;
+}
+
+export interface GoogleOAuthResult {
+  email: string;
+  is_new_user: boolean;
+  google_oauth_id: string;
+}
+
+export interface TotpSetupResult {
+  qr_code_base64: string;
+  secret: string;
+}
+
+export interface TotpVerifySetupResult {
+  backup_codes: string[];
 }
 
 export type VaultRole = "owner" | "editor" | "viewer";

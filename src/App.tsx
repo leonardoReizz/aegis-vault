@@ -8,6 +8,8 @@ import { VaultProvider } from "@/contexts/vault-context";
 import { AuthScreen } from "@/components/auth-screen";
 import { KeyBackupScreen } from "@/components/key-backup-screen";
 import { KeyImportScreen } from "@/components/key-import-screen";
+import { TotpVerifyScreen } from "@/components/totp-verify-screen";
+import { GoogleVaultPasswordScreen } from "@/components/google-vault-password-screen";
 import { AppLayout } from "@/components/app-layout";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
 import { VaultView } from "@/components/vault-view";
@@ -27,6 +29,11 @@ function AppRouter({ onReady }: { onReady?: () => void }) {
   if (authStatus === "unauthenticated") return <AuthScreen />;
   if (authStatus === "pending_key_backup") return <KeyBackupScreen />;
   if (authStatus === "pending_key_import") return <KeyImportScreen />;
+  if (authStatus === "pending_totp") return <TotpVerifyScreen />;
+  if (authStatus === "pending_google_vault_password_setup")
+    return <GoogleVaultPasswordScreen mode="setup" />;
+  if (authStatus === "pending_google_vault_password")
+    return <GoogleVaultPasswordScreen mode="login" />;
 
   return (
     <VaultListProvider>

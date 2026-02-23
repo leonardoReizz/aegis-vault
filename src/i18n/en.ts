@@ -20,6 +20,8 @@ export const en = {
     passwordMismatch: "Passwords do not match",
     rememberMe: "Remember me",
     logout: "Sign Out",
+    orContinueWith: "or continue with",
+    continueWithGoogle: "Continue with Google",
   },
   setup: {
     title: "Create Master Password",
@@ -273,6 +275,45 @@ export const en = {
     passwordChanged: "Password changed successfully. All encryption keys have been updated.",
     termsContent: "Terms of Use\n\nLast updated: February 2026\n\n1. Acceptance of Terms\nBy using Aegis Vault, you agree to these terms of use. If you do not agree, please discontinue use of the application.\n\n2. Description of Service\nAegis Vault is a local-first password manager that encrypts your data using your master password. Your passwords are stored encrypted on your device.\n\n3. User Responsibilities\nYou are responsible for maintaining the security of your master password and recovery key. We cannot recover your data if you lose access to both.\n\n4. Data Ownership\nAll data stored in Aegis Vault belongs to you. We do not access, read, or process your encrypted data.\n\n5. Limitation of Liability\nAegis Vault is provided \"as is\" without warranties of any kind. We are not liable for any data loss resulting from software bugs, user error, or device failure.\n\n6. Changes to Terms\nWe reserve the right to update these terms. Continued use of the application constitutes acceptance of updated terms.",
     privacyContent: "Privacy Policy\n\nLast updated: February 2026\n\n1. Data Collection\nAegis Vault collects minimal data: your email address for account identification and an encrypted password hash for authentication. Your vault data is encrypted locally and never transmitted in readable form.\n\n2. Local Storage\nYour passwords and sensitive data are encrypted with AES-256-GCM using keys derived from your master password via Argon2. The encryption keys never leave your device.\n\n3. Cloud Sync (Optional)\nIf you enable cloud sync, your vault data is transmitted to our servers in encrypted form. We cannot decrypt your data. Only you hold the keys.\n\n4. No Tracking\nAegis Vault does not use analytics, telemetry, or tracking of any kind. We do not collect usage data.\n\n5. Third-Party Services\nAegis Vault uses MongoDB for optional cloud sync and account management. No other third-party services receive your data.\n\n6. Data Deletion\nYou can delete your account and all associated data at any time. Local data is removed by uninstalling the application.\n\n7. Contact\nFor privacy concerns, contact us at privacy@aegisvault.app.",
+  },
+  googleAuth: {
+    setupTitle: "Create Vault Password",
+    setupDescription:
+      "This password encrypts your vault data. Google handles sign-in, but you need a separate password to protect your passwords.",
+    loginTitle: "Unlock Vault",
+    loginDescription: "Enter your vault password to decrypt your data.",
+    backToLogin: "Back to sign in",
+    vaultPassword: "Vault Password",
+    confirmVaultPassword: "Confirm Vault Password",
+  },
+  twoFactor: {
+    title: "Two-Factor Authentication",
+    description:
+      "Add an extra layer of security to your account using an authenticator app.",
+    enable: "Enable 2FA",
+    disable: "Disable 2FA",
+    enabled: "Enabled",
+    disabled: "Disabled",
+    setupTitle: "Set Up Two-Factor Authentication",
+    setupDescription:
+      "Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)",
+    manualEntry: "Manual entry key",
+    verifyCode: "Verify Code",
+    codePlaceholder: "000000",
+    verify: "Verify",
+    verifyTitle: "Two-Factor Authentication",
+    verifyDescription:
+      "Enter the 6-digit code from your authenticator app.",
+    backupCodesTitle: "Save Your Backup Codes",
+    backupCodesDescription:
+      "Store these codes in a safe place. Each code can only be used once.",
+    backupCodeHint: "You can also use a backup code",
+    backToLogin: "Back to sign in",
+    disableConfirm:
+      "Enter a code from your authenticator app to disable 2FA.",
+    disableWarning:
+      "This will remove two-factor authentication from your account.",
+    copied: "Copied!",
   },
 };
 

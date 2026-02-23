@@ -16,6 +16,18 @@ pub struct User {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub private_key_salt: Option<String>,
     pub created_at: String,
+    // OAuth fields
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oauth_provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oauth_id: Option<String>,
+    // TOTP 2FA fields
+    #[serde(default)]
+    pub totp_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub totp_secret: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub totp_backup_codes: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

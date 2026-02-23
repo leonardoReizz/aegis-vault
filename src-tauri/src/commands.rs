@@ -26,6 +26,13 @@ pub struct LoadedVault {
     pub path: PathBuf,
 }
 
+struct PendingTotp {
+    email: String,
+    password: String,
+    remember_me: bool,
+    created_at: std::time::Instant,
+}
+
 struct InnerState {
     current_user: Option<UserInfo>,
     user_dir: Option<PathBuf>,
@@ -35,6 +42,8 @@ struct InnerState {
     registry: Option<VaultRegistry>,
     vaults: HashMap<String, LoadedVault>,
     active_vault_id: Option<String>,
+    pending_totp: Option<PendingTotp>,
+    pending_totp_setup_secret: Option<String>,
 }
 
 impl InnerState {
@@ -89,6 +98,8 @@ impl AppState {
                 registry: None,
                 vaults: HashMap::new(),
                 active_vault_id: None,
+                pending_totp: None,
+                pending_totp_setup_secret: None,
             }),
         }
     }
@@ -149,6 +160,11 @@ pub async fn register(
         private_key_nonce: None,
         private_key_salt: None,
         created_at: chrono::Utc::now().to_rfc3339(),
+        oauth_provider: None,
+        oauth_id: None,
+        totp_enabled: false,
+        totp_secret: None,
+        totp_backup_codes: None,
     };
 
     let result = users
@@ -238,8 +254,8 @@ pub async fn login(
     remember_me: bool,
     state: State<'_, AppState>,
 ) -> Result<LoginResult, String> {
-    let result = perform_login(&email, &password, &*state).await?;
-    if remember_me {
+    let result = perform_login(&email, &password, remember_me, false, &*state).await?;
+    if !result.needs_totp && remember_me {
         save_session(&state.app_data_dir, &email, &password)?;
     }
     Ok(result)
@@ -250,7 +266,7 @@ pub async fn try_restore_session(
     state: State<'_, AppState>,
 ) -> Result<LoginResult, String> {
     let (email, password) = load_session(&state.app_data_dir)?;
-    match perform_login(&email, &password, &*state).await {
+    match perform_login(&email, &password, true, true, &*state).await {
         Ok(result) => Ok(result),
         Err(e) => {
             clear_session(&state.app_data_dir);
@@ -259,7 +275,13 @@ pub async fn try_restore_session(
     }
 }
 
-async fn perform_login(email: &str, password: &str, state: &AppState) -> Result<LoginResult, String> {
+async fn perform_login(
+    email: &str,
+    password: &str,
+    remember_me: bool,
+    skip_totp: bool,
+    state: &AppState,
+) -> Result<LoginResult, String> {
     let users = state.users_collection();
 
     let user = users
@@ -278,6 +300,22 @@ async fn perform_login(email: &str, password: &str, state: &AppState) -> Result<
         id: user_id.clone(),
         email: user.email.clone(),
     };
+
+    // Check TOTP 2FA
+    if user.totp_enabled && !skip_totp {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.pending_totp = Some(PendingTotp {
+            email: email.to_string(),
+            password: password.to_string(),
+            remember_me,
+            created_at: std::time::Instant::now(),
+        });
+        return Ok(LoginResult {
+            user: user_info,
+            needs_key_import: false,
+            needs_totp: true,
+        });
+    }
 
     {
         let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
@@ -440,6 +478,7 @@ async fn perform_login(email: &str, password: &str, state: &AppState) -> Result<
         Ok(LoginResult {
             user: user_info,
             needs_key_import,
+            needs_totp: false,
         })
     }
 }
@@ -610,6 +649,7 @@ pub struct RegisterResult {
 pub struct LoginResult {
     pub user: UserInfo,
     pub needs_key_import: bool,
+    pub needs_totp: bool,
 }
 
 #[tauri::command]
@@ -624,6 +664,8 @@ pub fn logout(state: State<AppState>) -> Result<(), String> {
     inner.registry = None;
     inner.vaults.clear();
     inner.active_vault_id = None;
+    inner.pending_totp = None;
+    inner.pending_totp_setup_secret = None;
     Ok(())
 }
 
@@ -1816,4 +1858,575 @@ pub fn toggle_favorite(id: String, state: State<AppState>) -> Result<bool, Strin
     inner.save_active()?;
 
     Ok(new_favorite)
+}
+
+// ── TOTP 2FA Commands ──
+
+/// Verify a TOTP code against a secret
+fn verify_totp_code(secret: &str, code: &str, email: &str) -> Result<bool, String> {
+    use totp_rs::{Algorithm, Secret, TOTP};
+
+    let secret_bytes = Secret::Encoded(secret.to_string())
+        .to_bytes()
+        .map_err(|e| format!("TOTP secret error: {}", e))?;
+
+    let totp = TOTP::new(
+        Algorithm::SHA1,
+        6,
+        1,
+        30,
+        secret_bytes,
+        Some("Aegis Vault".to_string()),
+        email.to_string(),
+    )
+    .map_err(|e| format!("TOTP error: {}", e))?;
+
+    Ok(totp.check_current(code).unwrap_or(false))
+}
+
+/// Hash a backup code with SHA-256
+fn hash_backup_code(code: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(code.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+/// Generate a random 8-character backup code (uppercase alphanumeric)
+fn generate_backup_code() -> String {
+    use rand::Rng;
+    let charset = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let mut rng = rand::rngs::OsRng;
+    (0..8)
+        .map(|_| {
+            let idx = rng.gen_range(0..charset.len());
+            charset[idx] as char
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn verify_totp_login(
+    code: String,
+    state: State<'_, AppState>,
+) -> Result<LoginResult, String> {
+    let pending = {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.pending_totp.take().ok_or("No pending TOTP verification")?
+    };
+
+    if pending.created_at.elapsed() > std::time::Duration::from_secs(300) {
+        return Err("TOTP verification expired. Please login again.".to_string());
+    }
+
+    // Get user to read TOTP secret
+    let users = state.users_collection();
+    let user = users
+        .find_one(doc! { "email": &pending.email }, None)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?
+        .ok_or("User not found")?;
+
+    let totp_secret = user.totp_secret.ok_or("TOTP not configured")?;
+
+    let code_trimmed = code.trim().to_string();
+    let totp_valid = verify_totp_code(&totp_secret, &code_trimmed, &pending.email)?;
+
+    if !totp_valid {
+        // Try backup codes
+        let backup_valid = if let Some(ref backup_codes) = user.totp_backup_codes {
+            let code_hash = hash_backup_code(&code_trimmed);
+            backup_codes.contains(&code_hash)
+        } else {
+            false
+        };
+
+        if backup_valid {
+            let code_hash = hash_backup_code(&code_trimmed);
+            users
+                .update_one(
+                    doc! { "email": &pending.email },
+                    doc! { "$pull": { "totp_backup_codes": &code_hash } },
+                    None,
+                )
+                .await
+                .map_err(|e| format!("Database error: {}", e))?;
+        } else {
+            // Re-store pending state so user can retry
+            let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+            inner.pending_totp = Some(pending);
+            return Err("Invalid verification code".to_string());
+        }
+    }
+
+    // Complete the login with skip_totp: true
+    let result = perform_login(&pending.email, &pending.password, pending.remember_me, true, &*state).await?;
+
+    if pending.remember_me {
+        save_session(&state.app_data_dir, &pending.email, &pending.password)?;
+    }
+
+    Ok(result)
+}
+
+#[derive(Serialize)]
+pub struct TotpSetupResult {
+    pub qr_code_base64: String,
+    pub secret: String,
+}
+
+#[derive(Serialize)]
+pub struct TotpVerifySetupResult {
+    pub backup_codes: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn setup_totp(
+    state: State<'_, AppState>,
+) -> Result<TotpSetupResult, String> {
+    use totp_rs::{Algorithm, Secret, TOTP};
+
+    let email = {
+        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.current_user.as_ref().ok_or("Not logged in")?.email.clone()
+    };
+
+    let mut secret_bytes = vec![0u8; 20];
+    rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut secret_bytes);
+    let secret = Secret::Raw(secret_bytes.clone());
+    let secret_encoded = secret.to_encoded().to_string();
+
+    let totp = TOTP::new(
+        Algorithm::SHA1,
+        6,
+        1,
+        30,
+        secret_bytes,
+        Some("Aegis Vault".to_string()),
+        email,
+    )
+    .map_err(|e| format!("TOTP error: {}", e))?;
+
+    let qr_code_base64 = totp
+        .get_qr_base64()
+        .map_err(|e| format!("QR code error: {}", e))?;
+
+    {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.pending_totp_setup_secret = Some(secret_encoded.clone());
+    }
+
+    Ok(TotpSetupResult {
+        qr_code_base64,
+        secret: secret_encoded,
+    })
+}
+
+#[tauri::command]
+pub async fn verify_totp_setup(
+    code: String,
+    state: State<'_, AppState>,
+) -> Result<TotpVerifySetupResult, String> {
+    let (email, secret) = {
+        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let email = inner
+            .current_user
+            .as_ref()
+            .ok_or("Not logged in")?
+            .email
+            .clone();
+        let secret = inner
+            .pending_totp_setup_secret
+            .clone()
+            .ok_or("No pending TOTP setup")?;
+        (email, secret)
+    };
+
+    if !verify_totp_code(&secret, code.trim(), &email)? {
+        return Err("Invalid verification code. Please try again.".to_string());
+    }
+
+    // Generate 8 backup codes
+    let mut backup_codes_plain: Vec<String> = Vec::new();
+    let mut backup_codes_hashed: Vec<String> = Vec::new();
+    for _ in 0..8 {
+        let code_str = generate_backup_code();
+        backup_codes_hashed.push(hash_backup_code(&code_str));
+        backup_codes_plain.push(code_str);
+    }
+
+    let user_id = {
+        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.current_user.as_ref().ok_or("Not logged in")?.id.clone()
+    };
+
+    let users = state.users_collection();
+    users
+        .update_one(
+            doc! { "_id": mongodb::bson::oid::ObjectId::parse_str(&user_id).map_err(|e| e.to_string())? },
+            doc! {
+                "$set": {
+                    "totp_enabled": true,
+                    "totp_secret": &secret,
+                    "totp_backup_codes": &backup_codes_hashed,
+                }
+            },
+            None,
+        )
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.pending_totp_setup_secret = None;
+    }
+
+    Ok(TotpVerifySetupResult {
+        backup_codes: backup_codes_plain,
+    })
+}
+
+#[tauri::command]
+pub async fn disable_totp(
+    code: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let (user_id, email) = {
+        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let user = inner.current_user.as_ref().ok_or("Not logged in")?;
+        (user.id.clone(), user.email.clone())
+    };
+
+    let users = state.users_collection();
+    let user = users
+        .find_one(
+            doc! { "_id": mongodb::bson::oid::ObjectId::parse_str(&user_id).map_err(|e| e.to_string())? },
+            None,
+        )
+        .await
+        .map_err(|e| format!("Database error: {}", e))?
+        .ok_or("User not found")?;
+
+    let totp_secret = user.totp_secret.ok_or("TOTP not enabled")?;
+
+    if !verify_totp_code(&totp_secret, code.trim(), &email)? {
+        return Err("Invalid verification code".to_string());
+    }
+
+    users
+        .update_one(
+            doc! { "_id": mongodb::bson::oid::ObjectId::parse_str(&user_id).map_err(|e| e.to_string())? },
+            doc! {
+                "$set": { "totp_enabled": false },
+                "$unset": { "totp_secret": "", "totp_backup_codes": "" },
+            },
+            None,
+        )
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    Ok(())
+}
+
+// ── Google OAuth Commands ──
+
+#[derive(Serialize)]
+pub struct GoogleOAuthResult {
+    pub email: String,
+    pub is_new_user: bool,
+    pub google_oauth_id: String,
+}
+
+#[tauri::command]
+pub async fn google_oauth_identify(
+    state: State<'_, AppState>,
+) -> Result<GoogleOAuthResult, String> {
+    let client_id = option_env!("GOOGLE_CLIENT_ID")
+        .ok_or("Google OAuth not configured (missing GOOGLE_CLIENT_ID)")?;
+    let client_secret = option_env!("GOOGLE_CLIENT_SECRET")
+        .ok_or("Google OAuth not configured (missing GOOGLE_CLIENT_SECRET)")?;
+
+    // Bind a temporary TCP listener on loopback with random port
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| format!("Failed to bind listener: {}", e))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| format!("Failed to get port: {}", e))?
+        .port();
+
+    let redirect_uri = format!("http://127.0.0.1:{}/callback", port);
+
+    // Build Google OAuth authorization URL
+    let encoded_redirect: String =
+        url::form_urlencoded::byte_serialize(redirect_uri.as_bytes()).collect();
+    let auth_url = format!(
+        "https://accounts.google.com/o/oauth2/v2/auth?\
+         client_id={}&redirect_uri={}&response_type=code&\
+         scope=openid%20email&access_type=offline&prompt=consent",
+        client_id, encoded_redirect
+    );
+
+    // Open system browser
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .arg(&auth_url)
+        .spawn()
+        .map_err(|e| format!("Failed to open browser: {}", e))?;
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("cmd")
+        .args(&["/C", "start", "", &auth_url])
+        .spawn()
+        .map_err(|e| format!("Failed to open browser: {}", e))?;
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open")
+        .arg(&auth_url)
+        .spawn()
+        .map_err(|e| format!("Failed to open browser: {}", e))?;
+
+    // Accept the callback with 120s timeout
+    let (mut stream, _addr) = tokio::time::timeout(
+        std::time::Duration::from_secs(120),
+        listener.accept(),
+    )
+    .await
+    .map_err(|_| "Google OAuth timed out. Please try again.".to_string())?
+    .map_err(|e| format!("Accept error: {}", e))?;
+
+    // Read HTTP request
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut buf = vec![0u8; 4096];
+    let n = stream
+        .read(&mut buf)
+        .await
+        .map_err(|e| format!("Read error: {}", e))?;
+    let request = String::from_utf8_lossy(&buf[..n]).to_string();
+
+    // Parse auth code from GET request
+    let first_line = request.lines().next().unwrap_or("");
+    let path = first_line.split_whitespace().nth(1).unwrap_or("");
+    let parsed_url = url::Url::parse(&format!("http://127.0.0.1{}", path))
+        .map_err(|e| format!("URL parse error: {}", e))?;
+
+    let code = parsed_url
+        .query_pairs()
+        .find(|(k, _)| k == "code")
+        .map(|(_, v)| v.to_string())
+        .ok_or("No auth code in callback. Authentication may have been cancelled.")?;
+
+    // Send success response to browser
+    let response_html = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n\
+        <html><body style=\"font-family:system-ui;display:flex;justify-content:center;align-items:center;height:100vh;margin:0\">\
+        <div style=\"text-align:center\"><h2>Authentication successful!</h2>\
+        <p>You can close this tab and return to Aegis Vault.</p></div>\
+        </body></html>";
+    let _ = stream.write_all(response_html.as_bytes()).await;
+    let _ = stream.flush().await;
+    drop(stream);
+
+    // Exchange auth code for tokens
+    let http_client = reqwest::Client::new();
+    let token_response = http_client
+        .post("https://oauth2.googleapis.com/token")
+        .form(&[
+            ("code", code.as_str()),
+            ("client_id", client_id),
+            ("client_secret", client_secret),
+            ("redirect_uri", redirect_uri.as_str()),
+            ("grant_type", "authorization_code"),
+        ])
+        .send()
+        .await
+        .map_err(|e| format!("Token exchange error: {}", e))?;
+
+    if !token_response.status().is_success() {
+        let body = token_response.text().await.unwrap_or_default();
+        return Err(format!("Google authentication failed: {}", body));
+    }
+
+    let token_json: serde_json::Value = token_response
+        .json()
+        .await
+        .map_err(|e| format!("Token parse error: {}", e))?;
+
+    // Parse ID token (JWT) to extract email and sub
+    let id_token = token_json["id_token"]
+        .as_str()
+        .ok_or("No id_token in Google response")?;
+
+    let parts: Vec<&str> = id_token.split('.').collect();
+    if parts.len() != 3 {
+        return Err("Invalid JWT format".to_string());
+    }
+
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    let payload_bytes = URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .map_err(|e| format!("JWT decode error: {}", e))?;
+    let payload: serde_json::Value = serde_json::from_slice(&payload_bytes)
+        .map_err(|e| format!("JWT parse error: {}", e))?;
+
+    let email = payload["email"]
+        .as_str()
+        .ok_or("No email in Google ID token")?
+        .to_string();
+    let google_sub = payload["sub"]
+        .as_str()
+        .ok_or("No sub in Google ID token")?
+        .to_string();
+
+    // Check if user exists in MongoDB
+    let users = state.users_collection();
+    let existing = users
+        .find_one(doc! { "email": &email }, None)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    let is_new_user = existing.is_none();
+
+    Ok(GoogleOAuthResult {
+        email,
+        is_new_user,
+        google_oauth_id: google_sub,
+    })
+}
+
+#[tauri::command]
+pub async fn register_with_google(
+    email: String,
+    password: String,
+    google_oauth_id: String,
+    state: State<'_, AppState>,
+) -> Result<RegisterResult, String> {
+    if password.len() < 8 {
+        return Err("Password must be at least 8 characters".to_string());
+    }
+
+    let users = state.users_collection();
+
+    let existing = users
+        .find_one(doc! { "email": &email }, None)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    if existing.is_some() {
+        return Err("Email already registered".to_string());
+    }
+
+    let password_hash = crypto::hash_password(&password)?;
+    let (rsa_private, rsa_public) = keypair::generate_keypair()?;
+    let public_pem = keypair::public_key_to_pem(&rsa_public)?;
+    let private_pem = keypair::private_key_to_pem(&rsa_private)?;
+
+    let user = User {
+        id: None,
+        email: email.clone(),
+        password_hash,
+        public_key: Some(public_pem),
+        encrypted_private_key: None,
+        private_key_nonce: None,
+        private_key_salt: None,
+        created_at: chrono::Utc::now().to_rfc3339(),
+        oauth_provider: Some("google".to_string()),
+        oauth_id: Some(google_oauth_id),
+        totp_enabled: false,
+        totp_secret: None,
+        totp_backup_codes: None,
+    };
+
+    let result = users
+        .insert_one(&user, None)
+        .await
+        .map_err(|e| format!("Database error: {}", e))?;
+
+    let user_id = result
+        .inserted_id
+        .as_object_id()
+        .ok_or("Failed to get user ID")?
+        .to_hex();
+
+    let user_info = UserInfo {
+        id: user_id.clone(),
+        email: email.clone(),
+    };
+
+    {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let user_dir = state.app_data_dir.join(&user_id);
+        std::fs::create_dir_all(user_dir.join("vaults"))
+            .map_err(|e| format!("Dir error: {}", e))?;
+
+        save_local_private_key(&user_dir, &password, &rsa_private)?;
+
+        let master_salt = crypto::generate_salt();
+        std::fs::write(user_dir.join("master.salt"), &master_salt)
+            .map_err(|e| format!("Write salt error: {}", e))?;
+        let master_key = crypto::derive_key(&password, &master_salt)?;
+
+        let vault_id = Uuid::new_v4().to_string();
+        let vault_key = vault::generate_vault_key();
+        let new_vault = Vault::new();
+        let vault_path = user_dir.join("vaults").join(format!("{}.pass", vault_id));
+        vault::save_vault(&new_vault, &vault_key, &vault_path)?;
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let meta = VaultMeta {
+            id: vault_id.clone(),
+            name: "My Vault".to_string(),
+            cloud_sync: false,
+            role: "owner".to_string(),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+
+        let mut registry = VaultRegistry::new();
+        registry.add_vault(meta.clone(), &vault_key, &master_key)?;
+        vault_meta::save_registry(&registry, &master_key, &user_dir.join("registry.pass"))?;
+
+        inner.vaults.insert(
+            vault_id.clone(),
+            LoadedVault {
+                meta,
+                key: vault_key,
+                vault: new_vault,
+                path: vault_path,
+            },
+        );
+        inner.active_vault_id = Some(vault_id);
+        inner.registry = Some(registry);
+        inner.master_key = Some(master_key);
+        inner.master_salt = Some(master_salt);
+        inner.private_key = Some(rsa_private);
+        inner.user_dir = Some(user_dir);
+        inner.current_user = Some(user_info.clone());
+    }
+
+    save_session(&state.app_data_dir, &email, &password)?;
+
+    Ok(RegisterResult {
+        user: user_info,
+        private_key_pem: private_pem,
+    })
+}
+
+// ── TOTP Status Command ──
+
+#[tauri::command]
+pub async fn get_totp_status(
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let user_id = {
+        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.current_user.as_ref().ok_or("Not logged in")?.id.clone()
+    };
+    let users = state.users_collection();
+    let user = users
+        .find_one(
+            doc! { "_id": mongodb::bson::oid::ObjectId::parse_str(&user_id).map_err(|e| e.to_string())? },
+            None,
+        )
+        .await
+        .map_err(|e| format!("Database error: {}", e))?
+        .ok_or("User not found")?;
+    Ok(user.totp_enabled)
 }
