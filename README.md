@@ -11,8 +11,11 @@ A cross-platform desktop password manager built with Tauri 2, React, and Rust. A
 - **Vault sharing** — Share vaults with other users via RSA key exchange. Role-based access control (owner, editor, viewer).
 - **Cloud sync** — Optional per-vault MongoDB sync for backup and cross-device access.
 - **Local-first private key** — Your RSA private key never leaves your machine. Export it as a recovery key for use on new devices.
+- **Google OAuth** — Sign in or register with your Google account.
+- **Two-Factor Authentication (TOTP)** — Optional TOTP-based 2FA with QR code setup and backup codes.
 - **16 entry types** — Login, Credit Card, Identity, SSH Key, Database, Crypto Wallet, Server, Software License, Secure Note, API Key, Wi-Fi, Bank Account, Email Account, Passport, Driver's License, and more.
-- **Password generator** — Configurable length with uppercase, lowercase, numbers, and symbols.
+- **Password generator** — Standalone page with configurable length, character sets, strength indicator, and quick save to any entry type.
+- **Security dashboard** — Overview with entry counts, strength distribution, category breakdown, and security insights.
 - **i18n** — English and Brazilian Portuguese.
 - **Custom window chrome** — Frameless window with macOS-style traffic light controls.
 
@@ -39,6 +42,7 @@ RSA-2048 Key Pair (generated on registration)
 - Argon2 password hash
 - RSA public key
 - Encrypted vault data (AES-256-GCM ciphertext)
+- TOTP secret (encrypted, if 2FA enabled)
 
 **What stays local only:**
 - RSA private key (encrypted with your master password)
@@ -52,6 +56,7 @@ RSA-2048 Key Pair (generated on registration)
 | Backend  | Rust, Tauri 2                                      |
 | Database | MongoDB                                            |
 | Crypto   | AES-256-GCM, Argon2id, RSA-2048 (OAEP + SHA-256)  |
+| Auth     | Email/password, Google OAuth, TOTP 2FA (totp-rs)   |
 | Build    | Vite 7, Cargo                                      |
 
 ## Prerequisites
@@ -72,11 +77,20 @@ cd pass
 # Install frontend dependencies
 yarn install
 
-# Configure MongoDB connection (defaults to mongodb://localhost:27017)
-echo "MONGODB_URI=mongodb://localhost:27017" > .env
+# Configure environment variables
+cp .env.example .env
+# Edit .env with your MongoDB URI and Google OAuth credentials
 
 # Run in development mode
 yarn tauri dev
+```
+
+### Environment Variables
+
+```env
+MONGODB_URI="mongodb://localhost:27017"
+GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
 ```
 
 ## Building
@@ -94,17 +108,29 @@ pass/
 ├── src/                          # Frontend (React + TypeScript)
 │   ├── components/               # UI components
 │   │   ├── ui/                   # shadcn/ui primitives
-│   │   ├── auth-screen.tsx       # Login / Register
+│   │   ├── dashboard/            # Dashboard page & widgets
+│   │   │   ├── dashboard-page.tsx
+│   │   │   ├── security-overview.tsx
+│   │   │   ├── security-insights.tsx
+│   │   │   ├── category-breakdown.tsx
+│   │   │   ├── recent-entries.tsx
+│   │   │   └── stat-card.tsx
+│   │   ├── auth-screen.tsx       # Login / Register (email + Google OAuth)
 │   │   ├── vault-view.tsx        # Main vault interface
-│   │   ├── entry-dialog.tsx      # Add / Edit entries
+│   │   ├── entry-dialog.tsx      # Add / Edit entries (all 16 types)
 │   │   ├── entry-card.tsx        # Entry display card
+│   │   ├── generator-page.tsx    # Standalone password generator
 │   │   ├── vault-selector.tsx    # Multi-vault switcher
+│   │   ├── settings-dialog.tsx   # User settings (password, 2FA)
+│   │   ├── vault-settings-dialog.tsx # Per-vault settings & sharing
 │   │   ├── key-backup-screen.tsx # Recovery key export (post-register)
 │   │   ├── key-import-screen.tsx # Recovery key import (new device)
+│   │   ├── totp-verify-screen.tsx # 2FA verification on login
+│   │   ├── google-vault-password-screen.tsx # Google OAuth vault password
 │   │   └── ...
 │   ├── contexts/                 # React contexts (auth, vault, vault-list)
 │   ├── i18n/                     # Translations (en, pt-BR)
-│   ├── lib/                      # Entry schemas, utilities
+│   ├── lib/                      # Entry schemas, password strength, utilities
 │   └── types/                    # TypeScript interfaces
 │
 ├── src-tauri/                    # Backend (Rust)
@@ -118,6 +144,7 @@ pass/
 │       ├── password.rs           # Password strength evaluation
 │       └── lib.rs                # Tauri app setup
 │
+├── .github/workflows/release.yml # CI/CD release workflow
 └── package.json
 ```
 
@@ -138,11 +165,13 @@ On **login from a new device** (where no local key file exists), the app prompts
 
 ## Roadmap
 
-- [ ] Google Authentication — Sign in with your Google account
-- [ ] Two-Factor Authentication (2FA) — Extra security layer for account access
+- [x] Google Authentication — Sign in with your Google account
+- [x] Two-Factor Authentication (2FA) — TOTP-based with QR code setup and backup codes
+- [x] Standalone Password Generator — Full page with strength indicator and quick save to vault
+- [x] Security Dashboard — Entry stats, strength distribution, and security insights
 - [ ] Audit Log — Full change history tracking across vaults and entries
-- [ ] Standalone Password Generator — Use the password generator without creating an entry
 - [ ] Password History & Rollback — Version control for credentials with the ability to restore previous passwords
+- [ ] Browser Extension — Auto-fill credentials from the vault
 
 ## License
 
