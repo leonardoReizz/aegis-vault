@@ -56,9 +56,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "Pass ${{ github.ref_name }}"
+          releaseName: "Aegis Vault ${{ github.ref_name }}"
           releaseBody: "Download the installer for your platform below."
           releaseDraft: true
           prerelease: false
